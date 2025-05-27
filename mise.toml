@@ -1,0 +1,7 @@
+[tools]
+node = "24.1.0"
+pnpm = "latest"
+
+[settings]
+pin = true
+
