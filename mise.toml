@@ -1,6 +1,6 @@
 [tools]
-node = "24.1.0"
-pnpm = "latest"
+node = "22.11.0"
+pnpm = "10.11.0"
 
 [settings]
 pin = true
