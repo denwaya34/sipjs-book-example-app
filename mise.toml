@@ -4,4 +4,5 @@ pnpm = "10.11.0"
 
 [settings]
 pin = true
+paranoid = false
 
