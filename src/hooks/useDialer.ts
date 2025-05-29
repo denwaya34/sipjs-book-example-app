@@ -1,11 +1,11 @@
-import { useCallback, useState } from 'react';
+import { type Dispatch, type SetStateAction, useCallback, useState } from 'react';
 
 /**
  * ダイアラーフックの戻り値インターフェース
  */
 interface UseDialerReturn {
   dialedNumber: string;
-  setDialedNumber: React.Dispatch<React.SetStateAction<string>>;
+  setDialedNumber: Dispatch<SetStateAction<string>>;
   handleDialedNumberChange: (value: string) => void;
   handleDialPadClick: (digit: string) => void;
   clearDialedNumber: () => void;
