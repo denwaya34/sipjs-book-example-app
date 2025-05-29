@@ -278,12 +278,26 @@ function App() {
   const setupAudioSession = (session: Invitation | Inviter): void => {
     try {
       // WebRTC PeerConnectionから音声ストリームを取得
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const peerConnection = (session.sessionDescriptionHandler as any)?.peerConnection;
-      if (peerConnection) {
-        const remoteStreams = peerConnection.getRemoteStreams();
-        if (remoteStreams.length > 0 && audioRef.current) {
-          audioRef.current.srcObject = remoteStreams[0];
+      // SessionDescriptionHandlerの内部実装にアクセスするための型定義
+      interface SessionDescriptionHandlerWithPeerConnection {
+        peerConnection?: RTCPeerConnection;
+      }
+
+      const sessionDescriptionHandler = session.sessionDescriptionHandler as SessionDescriptionHandlerWithPeerConnection | undefined;
+      const peerConnection = sessionDescriptionHandler?.peerConnection;
+
+      if (peerConnection && audioRef.current) {
+        // 新しいMediaStreamを作成してリモートトラックを追加
+        const remoteStream = new MediaStream();
+        const receivers = peerConnection.getReceivers();
+
+        receivers.forEach((receiver) => {
+          const track = receiver.track;
+          remoteStream.addTrack(track);
+        });
+
+        if (remoteStream.getTracks().length > 0) {
+          audioRef.current.srcObject = remoteStream;
           void audioRef.current.play().catch(console.error);
         }
       }
@@ -311,7 +325,10 @@ function App() {
           className: 'bg-gray-600',
           disabled: true,
           icon: <PhoneOff className="mr-2 h-5 w-5" />,
-          onClick: () => {},
+          onClick: () => {
+            // 終了中は何もしない
+            console.log('通話終了処理中...');
+          },
           text: '終了中...',
         };
       case 'in-call':
