@@ -140,12 +140,24 @@ export default tseslint.config(
   },
   {
     files: ['**/*.json'],
-    ignores: ['package-lock.json'],
+    ignores: [
+      'package-lock.json',
+      'tsconfig.json',
+      'tsconfig.app.json',
+      'tsconfig.node.json',
+      '.vscode/devcontainer.json',
+    ],
     language: 'json/json',
     ...json.configs.recommended,
   },
   {
-    files: ['**/*.jsonc'],
+    files: [
+      '**/*.jsonc',
+      'tsconfig.json',
+      'tsconfig.app.json',
+      'tsconfig.node.json',
+      '.vscode/devcontainer.json',
+    ],
     language: 'json/jsonc',
     ...json.configs.recommended,
   },
