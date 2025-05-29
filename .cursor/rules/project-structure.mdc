@@ -1,0 +1,188 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# プロジェクト構造ガイド
+
+## ディレクトリ構造
+
+```
+sipjs-book-example-app/
+├── .cursor/                    # Cursor IDE設定
+│   └── rules/                  # Cursor Rules
+├── .github/                    # GitHub Actions設定
+├── public/                     # 静的アセット
+├── src/                        # ソースコード
+│   ├── components/             # Reactコンポーネント
+│   │   └── ui/                 # shadcn/uiコンポーネント
+│   ├── lib/                    # ユーティリティライブラリ
+│   ├── assets/                 # アセットファイル
+│   ├── @types/                 # 型定義ファイル
+│   ├── App.tsx                 # メインアプリケーションコンポーネント
+│   ├── main.tsx                # Reactエントリーポイント
+│   └── index.css               # グローバルスタイル
+├── index.html                  # HTMLエントリーポイント
+├── package.json                # 依存関係とスクリプト
+├── vite.config.ts              # Vite設定
+├── tsconfig.json               # TypeScript設定
+├── eslint.config.js            # ESLint設定
+└── components.json             # shadcn/ui設定
+```
+
+## ファイル組織原則
+
+### コンポーネント配置
+- **メインコンポーネント**: [src/App.tsx](mdc:src/App.tsx) - アプリケーションのルートコンポーネント
+- **UIコンポーネント**: [src/components/ui/](mdc:src/components/ui) - 再利用可能なUIコンポーネント
+- **カスタムコンポーネント**: `src/components/` - プロジェクト固有のコンポーネント
+
+### 設定ファイル
+- **Vite**: [vite.config.ts](mdc:vite.config.ts) - ビルドツール設定
+- **TypeScript**: [tsconfig.json](mdc:tsconfig.json) - 型チェック設定
+- **ESLint**: [eslint.config.js](mdc:eslint.config.js) - コード品質設定
+- **shadcn/ui**: [components.json](mdc:components.json) - UIライブラリ設定
+
+### アセット管理
+- **静的ファイル**: `public/` - 直接配信される静的アセット
+- **インポートアセット**: `src/assets/` - バンドルされるアセット
+- **スタイル**: [src/index.css](mdc:src/index.css) - Tailwind CSSとグローバルスタイル
+
+## ファイル命名規則
+
+### TypeScript/React
+- **コンポーネント**: `PascalCase.tsx` (例: `App.tsx`, `Button.tsx`)
+- **フック**: `use + PascalCase.ts` (例: `useAuth.ts`, `useSipConnection.ts`)
+- **ユーティリティ**: `camelCase.ts` (例: `utils.ts`, `sipHelpers.ts`)
+- **型定義**: `types.ts` または `*.types.ts`
+
+### 設定ファイル
+- **設定**: `kebab-case.config.ts` (例: `vite.config.ts`, `tailwind.config.ts`)
+- **ドットファイル**: `.filename` (例: `.gitignore`, `.eslintrc`)
+
+## インポート規則
+
+### パスエイリアス
+```typescript
+// 絶対パス（推奨）
+import { Button } from '@/components/ui/button';
+import { utils } from '@/lib/utils';
+
+// 相対パス（同一ディレクトリ内のみ）
+import './styles.css';
+```
+
+### インポート順序
+```typescript
+// 1. Node.jsモジュール
+import { useEffect, useState } from 'react';
+
+// 2. 外部ライブラリ
+import { UserAgent } from 'sip.js';
+
+// 3. 内部モジュール（絶対パス）
+import { Button } from '@/components/ui/button';
+import { utils } from '@/lib/utils';
+
+// 4. 相対パス
+import './Component.css';
+```
+
+## コンポーネント構造
+
+### 単一ファイルコンポーネント
+```typescript
+// imports
+import { ... } from '...';
+
+// types
+interface ComponentProps {
+  // props定義
+}
+
+// component
+export function Component({ ...props }: ComponentProps) {
+  // hooks
+  // handlers
+  // render
+}
+
+// default export
+export default Component;
+```
+
+### 複数ファイルコンポーネント
+```
+components/
+├── MyComponent/
+│   ├── index.ts          # エクスポート
+│   ├── MyComponent.tsx   # メインコンポーネント
+│   ├── MyComponent.types.ts  # 型定義
+│   └── MyComponent.test.tsx  # テスト
+```
+
+## 状態管理パターン
+
+### ローカル状態
+```typescript
+// useState for simple state
+const [value, setValue] = useState<string>('');
+
+// useReducer for complex state
+const [state, dispatch] = useReducer(reducer, initialState);
+```
+
+### グローバル状態
+```typescript
+// Context API for shared state
+const SipContext = createContext<SipContextType | null>(null);
+
+// Custom hooks for context
+export const useSipContext = () => {
+  const context = useContext(SipContext);
+  if (!context) {
+    throw new Error('useSipContext must be used within SipProvider');
+  }
+  return context;
+};
+```
+
+## エラーハンドリング
+
+### エラーバウンダリ
+```typescript
+// src/components/ErrorBoundary.tsx
+class ErrorBoundary extends Component<Props, State> {
+  // エラーキャッチとフォールバックUI
+}
+```
+
+### 非同期エラー
+```typescript
+try {
+  await asyncOperation();
+} catch (error) {
+  console.error('Operation failed:', error);
+  // ユーザーフレンドリーなエラー表示
+}
+```
+
+## テスト構造
+
+### テストファイル配置
+```
+src/
+├── components/
+│   ├── Button/
+│   │   ├── Button.tsx
+│   │   └── Button.test.tsx
+│   └── __tests__/          # 共通テスト
+└── __mocks__/              # モックファイル
+```
+
+### テスト命名
+- **ユニットテスト**: `Component.test.tsx`
+- **統合テスト**: `Component.integration.test.tsx`
+- **E2Eテスト**: `Component.e2e.test.tsx`
+
+この構造に従うことで、スケーラブルで保守性の高いプロジェクトを維持できます。
