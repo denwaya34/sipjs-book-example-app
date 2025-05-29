@@ -1,12 +1,13 @@
 import js from '@eslint/js';
-import globals from 'globals';
+import stylistic from '@stylistic/eslint-plugin';
+import perfectionist from 'eslint-plugin-perfectionist';
+import reactDom from 'eslint-plugin-react-dom';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
-import tseslint from 'typescript-eslint';
-import unusedImports from 'eslint-plugin-unused-imports';
 import reactX from 'eslint-plugin-react-x';
-import reactDom from 'eslint-plugin-react-dom';
-import stylistic from '@stylistic/eslint-plugin';
+import unusedImports from 'eslint-plugin-unused-imports';
+import globals from 'globals';
+import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
@@ -20,6 +21,12 @@ export default tseslint.config(
         semi: true,
       }),
     ],
+    plugins: {
+      perfectionist,
+    },
+    rules: {
+      'perfectionist/sort-imports': 'error',
+    },
   },
   {
     files: ['**/*.{ts,tsx}'],
