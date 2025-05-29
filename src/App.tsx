@@ -248,7 +248,7 @@ function App() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <Input
-                  className="text-lg font-mono text-center border-2 border-gray-200 shadow-sm text-2xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                  className="font-mono text-center border-2 border-gray-200 shadow-sm text-2xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                   maxLength={20}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                     handleDialedNumberChange(e.target.value);
