@@ -25,10 +25,8 @@ export default tseslint.config(
         semi: true,
       }),
       importPlugin.flatConfigs.recommended,
+      perfectionist.configs['recommended-natural'],
     ],
-    plugins: {
-      perfectionist,
-    },
     rules: {
       'perfectionist/sort-imports': 'error',
     },
@@ -40,7 +38,8 @@ export default tseslint.config(
       ...tseslint.configs.stylisticTypeChecked,
     ],
     languageOptions: {
-      ecmaVersion: 2020,
+      ecmaVersion: 'latest',
+      sourceType: 'module',
       globals: {
         ...globals.browser,
         ...globals.node,

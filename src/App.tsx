@@ -1,6 +1,6 @@
-import { Phone, Wifi, WifiOff, PhoneCall, PhoneOff } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
-import { UserAgent, Inviter, Invitation } from 'sip.js';
+import { Phone, PhoneCall, PhoneOff, Wifi, WifiOff } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Invitation, Inviter, UserAgent } from 'sip.js';
 import { SessionState } from 'sip.js/lib/api/session-state';
 
 import { Button } from '@/components/ui/button';
@@ -9,23 +9,23 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 /**
- * SIP設定のインターフェース定義
+ * 通話状態の型定義
  */
-interface SipConfig {
-  url: string;
-  username: string;
-  password: string;
-}
+type CallStatus = 'calling' | 'ending' | 'idle' | 'in-call' | 'ringing';
 
 /**
  * SIP接続状態の型定義
  */
-type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
+type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'error';
 
 /**
- * 通話状態の型定義
+ * SIP設定のインターフェース定義
  */
-type CallStatus = 'idle' | 'calling' | 'ringing' | 'in-call' | 'ending';
+interface SipConfig {
+  password: string;
+  url: string;
+  username: string;
+}
 
 /**
  * ダイアルパッドのボタン配列
@@ -39,9 +39,9 @@ const DIAL_PAD_BUTTONS = [
 
 function App() {
   const [sipConfig, setSipConfig] = useState<SipConfig>({
+    password: '',
     url: '',
     username: '',
-    password: '',
   });
   const [dialedNumber, setDialedNumber] = useState<string>('');
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
@@ -49,9 +49,9 @@ function App() {
   const [incomingCallNumber, setIncomingCallNumber] = useState<string>('');
 
   // SIP.js のUserAgentインスタンスへの参照
-  const userAgentRef = useRef<UserAgent | null>(null);
+  const userAgentRef = useRef<null | UserAgent>(null);
   // 現在のセッション（通話）への参照
-  const currentSessionRef = useRef<Inviter | Invitation | null>(null);
+  const currentSessionRef = useRef<Invitation | Inviter | null>(null);
   // 通話中のオーディオ要素への参照
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -132,12 +132,8 @@ function App() {
 
       // UserAgent オプションの設定
       const userAgentOptions = {
-        uri: UserAgent.makeURI(`sip:${sipConfig.username}@${sipConfig.url.replace(/^(ws|wss):\/\//, '')}`),
-        transportOptions: {
-          server: serverUri,
-        },
-        authorizationUsername: sipConfig.username,
         authorizationPassword: sipConfig.password,
+        authorizationUsername: sipConfig.username,
         delegate: {
           // 着信通話の処理
           onInvite: (invitation: Invitation) => {
@@ -152,6 +148,10 @@ function App() {
             }, 1000);
           },
         },
+        transportOptions: {
+          server: serverUri,
+        },
+        uri: UserAgent.makeURI(`sip:${sipConfig.username}@${sipConfig.url.replace(/^(ws|wss):\/\//, '')}`),
       };
 
       // UserAgent インスタンスの作成
@@ -198,13 +198,13 @@ function App() {
       inviter.stateChange.addListener((state) => {
         console.log('通話状態変更:', state);
         switch (state) {
-          case SessionState.Establishing:
-            setCallStatus('calling');
-            break;
           case SessionState.Established:
             setCallStatus('in-call');
             // 音声セッションの設定
             setupAudioSession(inviter);
+            break;
+          case SessionState.Establishing:
+            setCallStatus('calling');
             break;
           case SessionState.Terminated:
             setCallStatus('idle');
@@ -275,7 +275,7 @@ function App() {
   /**
    * 音声セッションのセットアップ
    */
-  const setupAudioSession = (session: Inviter | Invitation): void => {
+  const setupAudioSession = (session: Invitation | Inviter): void => {
     try {
       // WebRTC PeerConnectionから音声ストリームを取得
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -300,43 +300,43 @@ function App() {
     switch (callStatus) {
       case 'calling':
         return {
-          text: '発信中...',
-          icon: <PhoneCall className="mr-2 h-5 w-5 animate-pulse" />,
           className: 'bg-yellow-600 hover:bg-yellow-700',
-          onClick: handleHangup,
           disabled: false,
-        };
-      case 'ringing':
-        return {
-          text: '着信中',
           icon: <PhoneCall className="mr-2 h-5 w-5 animate-pulse" />,
-          className: 'bg-blue-600 hover:bg-blue-700',
-          onClick: handleAnswerCall,
-          disabled: false,
-        };
-      case 'in-call':
-        return {
-          text: '通話終了',
-          icon: <PhoneOff className="mr-2 h-5 w-5" />,
-          className: 'bg-red-600 hover:bg-red-700',
           onClick: handleHangup,
-          disabled: false,
+          text: '発信中...',
         };
       case 'ending':
         return {
-          text: '終了中...',
-          icon: <PhoneOff className="mr-2 h-5 w-5" />,
           className: 'bg-gray-600',
-          onClick: () => {},
           disabled: true,
+          icon: <PhoneOff className="mr-2 h-5 w-5" />,
+          onClick: () => {},
+          text: '終了中...',
+        };
+      case 'in-call':
+        return {
+          className: 'bg-red-600 hover:bg-red-700',
+          disabled: false,
+          icon: <PhoneOff className="mr-2 h-5 w-5" />,
+          onClick: handleHangup,
+          text: '通話終了',
+        };
+      case 'ringing':
+        return {
+          className: 'bg-blue-600 hover:bg-blue-700',
+          disabled: false,
+          icon: <PhoneCall className="mr-2 h-5 w-5 animate-pulse" />,
+          onClick: handleAnswerCall,
+          text: '着信中',
         };
       default:
         return {
-          text: '発信',
-          icon: <Phone className="mr-2 h-5 w-5" />,
           className: 'bg-green-600 hover:bg-green-700',
-          onClick: handleCall,
           disabled: !dialedNumber || connectionStatus !== 'connected',
+          icon: <Phone className="mr-2 h-5 w-5" />,
+          onClick: handleCall,
+          text: '発信',
         };
     }
   };
@@ -346,33 +346,33 @@ function App() {
    */
   const getConnectionButtonContent = () => {
     switch (connectionStatus) {
-      case 'connecting':
-        return {
-          text: '接続中...',
-          icon: <Wifi className="mr-2 h-4 w-4 animate-pulse" />,
-          className: 'bg-yellow-600 hover:bg-yellow-700',
-          disabled: true,
-        };
       case 'connected':
         return {
-          text: '切断',
-          icon: <WifiOff className="mr-2 h-4 w-4" />,
           className: 'bg-red-600 hover:bg-red-700',
           disabled: false,
+          icon: <WifiOff className="mr-2 h-4 w-4" />,
+          text: '切断',
+        };
+      case 'connecting':
+        return {
+          className: 'bg-yellow-600 hover:bg-yellow-700',
+          disabled: true,
+          icon: <Wifi className="mr-2 h-4 w-4 animate-pulse" />,
+          text: '接続中...',
         };
       case 'error':
         return {
-          text: '再接続',
-          icon: <Wifi className="mr-2 h-4 w-4" />,
           className: 'bg-orange-600 hover:bg-orange-700',
           disabled: false,
+          icon: <Wifi className="mr-2 h-4 w-4" />,
+          text: '再接続',
         };
       default:
         return {
-          text: '接続',
-          icon: <Wifi className="mr-2 h-4 w-4" />,
           className: 'bg-blue-600 hover:bg-blue-700',
           disabled: false,
+          icon: <Wifi className="mr-2 h-4 w-4" />,
+          text: '接続',
         };
     }
   };
@@ -394,9 +394,9 @@ function App() {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen w-full bg-cyan-50 p-4">
       {/* 音声再生用のhidden audio要素 */}
-      <audio ref={audioRef} style={{ display: 'none' }} autoPlay />
+      <audio autoPlay ref={audioRef} style={{ display: 'none' }} />
 
-      <div id="phone" className="flex flex-col lg:flex-row gap-8 w-full max-w-6xl">
+      <div className="flex flex-col lg:flex-row gap-8 w-full max-w-6xl" id="phone">
         {/* SIP設定フォーム */}
         <Card className="w-full lg:w-1/3">
           <CardHeader>
@@ -409,53 +409,53 @@ function App() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="sip-url" className="text-sm font-medium">
+              <Label className="text-sm font-medium" htmlFor="sip-url">
                 SIP URL
               </Label>
               <Input
+                className="w-full"
+                disabled={connectionStatus === 'connected'}
                 id="sip-url"
-                type="url"
-                placeholder="sip:example.com:5060"
-                value={sipConfig.url}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                   handleSipConfigChange('url', e.target.value);
                 }}
-                className="w-full"
-                disabled={connectionStatus === 'connected'}
+                placeholder="sip:example.com:5060"
+                type="url"
+                value={sipConfig.url}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="sip-username" className="text-sm font-medium">
+              <Label className="text-sm font-medium" htmlFor="sip-username">
                 SIPユーザ名
               </Label>
               <Input
+                className="w-full"
+                disabled={connectionStatus === 'connected'}
                 id="sip-username"
-                type="text"
-                placeholder="ユーザ名を入力"
-                value={sipConfig.username}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                   handleSipConfigChange('username', e.target.value);
                 }}
-                className="w-full"
-                disabled={connectionStatus === 'connected'}
+                placeholder="ユーザ名を入力"
+                type="text"
+                value={sipConfig.username}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="sip-password" className="text-sm font-medium">
+              <Label className="text-sm font-medium" htmlFor="sip-password">
                 パスワード
               </Label>
               <Input
+                className="w-full"
+                disabled={connectionStatus === 'connected'}
                 id="sip-password"
-                type="password"
-                placeholder="パスワードを入力"
-                value={sipConfig.password}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                   handleSipConfigChange('password', e.target.value);
                 }}
-                className="w-full"
-                disabled={connectionStatus === 'connected'}
+                placeholder="パスワードを入力"
+                type="password"
+                value={sipConfig.password}
               />
             </div>
 
@@ -473,14 +473,14 @@ function App() {
 
             {/* 接続ボタン */}
             <Button
-              onClick={() => {
-                void handleConnect();
-              }}
+              className={`w-full h-12 text-sm font-semibold rounded-xl shadow-lg transition-all duration-200 hover:shadow-xl ${getConnectionButtonContent().className}`}
               disabled={
                 (!isSipConfigValid() && connectionStatus !== 'connected')
                 || getConnectionButtonContent().disabled
               }
-              className={`w-full h-12 text-sm font-semibold rounded-xl shadow-lg transition-all duration-200 hover:shadow-xl ${getConnectionButtonContent().className}`}
+              onClick={() => {
+                void handleConnect();
+              }}
             >
               {getConnectionButtonContent().icon}
               {getConnectionButtonContent().text}
@@ -495,20 +495,20 @@ function App() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <Input
-                  value={dialedNumber}
+                  className="text-lg font-mono text-center border-2 border-gray-200 shadow-sm text-2xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                  maxLength={20}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                     handleDialedNumberChange(e.target.value);
                   }}
                   placeholder="番号を入力してください"
-                  className="text-lg font-mono text-center border-2 border-gray-200 shadow-sm text-2xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                  maxLength={20}
+                  value={dialedNumber}
                 />
                 <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleClear}
                   className="ml-2"
                   disabled={!dialedNumber}
+                  onClick={handleClear}
+                  size="sm"
+                  variant="ghost"
                 >
                   クリア
                 </Button>
@@ -520,11 +520,11 @@ function App() {
           <div className="grid grid-cols-3 gap-4 w-full max-w-md">
             {DIAL_PAD_BUTTONS.flat().map(digit => (
               <Button
-                key={digit}
-                variant="outline"
-                size="lg"
-                onClick={() => { handleDialPadClick(digit); }}
                 className="h-16 w-full text-2xl font-bold bg-white hover:bg-gray-50 border-2 border-gray-300 rounded-xl shadow-md transition-all duration-200 hover:shadow-lg active:scale-95"
+                key={digit}
+                onClick={() => { handleDialPadClick(digit); }}
+                size="lg"
+                variant="outline"
               >
                 {digit}
               </Button>
@@ -533,12 +533,12 @@ function App() {
 
           {/* 発信/終了ボタン */}
           <Button
+            className={`w-full max-w-md h-14 text-lg font-semibold disabled:bg-gray-400 rounded-xl shadow-lg transition-all duration-200 hover:shadow-xl ${getCallButtonContent().className}`}
+            disabled={getCallButtonContent().disabled}
             onClick={() => {
               const buttonContent = getCallButtonContent();
               buttonContent.onClick();
             }}
-            disabled={getCallButtonContent().disabled}
-            className={`w-full max-w-md h-14 text-lg font-semibold disabled:bg-gray-400 rounded-xl shadow-lg transition-all duration-200 hover:shadow-xl ${getCallButtonContent().className}`}
           >
             {getCallButtonContent().icon}
             {getCallButtonContent().text}
