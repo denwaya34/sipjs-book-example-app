@@ -6,6 +6,7 @@ import tseslint from 'typescript-eslint'
 import unusedImports from "eslint-plugin-unused-imports";
 import reactX from 'eslint-plugin-react-x'
 import reactDom from 'eslint-plugin-react-dom'
+import stylistic from '@stylistic/eslint-plugin'
 
 export default tseslint.config(
   {
@@ -14,6 +15,9 @@ export default tseslint.config(
   {
     extends: [
       js.configs.recommended,
+      stylistic.configs.customize({
+        semi: true,
+      }),
       ...tseslint.configs.strictTypeChecked,
       ...tseslint.configs.stylisticTypeChecked,
     ],
