@@ -1,5 +1,6 @@
-import { Phone, Wifi, WifiOff } from 'lucide-react';
-import { useState } from 'react';
+import { Phone, Wifi, WifiOff, PhoneCall, PhoneOff } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { UserAgent, Inviter, Invitation, SessionState } from 'sip.js';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,6 +22,11 @@ interface SipConfig {
 type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
 /**
+ * 通話状態の型定義
+ */
+type CallStatus = 'idle' | 'calling' | 'incoming' | 'active' | 'ending';
+
+/**
  * ダイアルパッドのボタン配列
  */
 const DIAL_PAD_BUTTONS = [
@@ -38,6 +44,55 @@ function App() {
   });
   const [dialedNumber, setDialedNumber] = useState<string>('');
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
+  const [callStatus, setCallStatus] = useState<CallStatus>('idle');
+  const [incomingNumber, setIncomingNumber] = useState<string>('');
+  
+  // SIP.js UserAgent
+  const userAgentRef = useRef<UserAgent | null>(null);
+  const currentSessionRef = useRef<Inviter | Invitation | null>(null);
+
+  // コンポーネントのクリーンアップ
+  useEffect(() => {
+    return () => {
+      if (userAgentRef.current) {
+        userAgentRef.current.stop();
+      }
+    };
+  }, []);
+
+  /**
+   * SIP UserAgentの初期化
+   */
+  const initializeUserAgent = () => {
+    if (userAgentRef.current) {
+      userAgentRef.current.stop();
+    }
+
+    const userAgent = new UserAgent({
+      uri: UserAgent.makeURI(`sip:${sipConfig.username}@${sipConfig.url.replace('sip:', '').split(':')[0]}`),
+      transportOptions: {
+        server: sipConfig.url,
+      },
+      authorizationUsername: sipConfig.username,
+      authorizationPassword: sipConfig.password,
+      displayName: sipConfig.username,
+    });
+
+    // 着信処理
+    userAgent.delegate = {
+      onInvite: (invitation: Invitation) => {
+        console.log('着信:', invitation);
+        setIncomingNumber(invitation.remoteIdentity.uri.user || '不明');
+        setCallStatus('incoming');
+        currentSessionRef.current = invitation;
+        
+        // 着信音などの処理をここに追加可能
+      }
+    };
+
+    userAgentRef.current = userAgent;
+    return userAgent;
+  };
 
   /**
    * ダイアル番号入力時の処理（キーボード入力対応）
@@ -79,7 +134,12 @@ function App() {
   const handleConnect = async (): Promise<void> => {
     if (connectionStatus === 'connected') {
       // 切断処理
+      if (userAgentRef.current) {
+        await userAgentRef.current.stop();
+        userAgentRef.current = null;
+      }
       setConnectionStatus('disconnected');
+      setCallStatus('idle');
       console.log('SIP接続を切断しました');
       return;
     }
@@ -89,8 +149,9 @@ function App() {
     console.log('SIP接続を開始します:', sipConfig);
 
     try {
-      // TODO: SIP.js を使用した実際の接続処理を実装
-      await new Promise(resolve => setTimeout(resolve, 2000)); // 仮の接続処理
+      const userAgent = initializeUserAgent();
+      
+      await userAgent.start();
       setConnectionStatus('connected');
       console.log('SIP接続が完了しました');
     }
@@ -146,9 +207,58 @@ function App() {
   /**
    * 発信ボタンクリック時の処理
    */
-  const handleCall = (): void => {
+  const handleCall = async (): Promise<void> => {
+    if (!userAgentRef.current || connectionStatus !== 'connected') {
+      console.error('SIP接続が確立されていません');
+      return;
+    }
+
+    if (callStatus === 'active') {
+      // 通話終了
+      if (currentSessionRef.current) {
+        await currentSessionRef.current.bye();
+        currentSessionRef.current = null;
+      }
+      setCallStatus('idle');
+      console.log('通話を終了しました');
+      return;
+    }
+
     console.log('発信開始:', { dialedNumber, sipConfig });
-    // TODO: SIP.js を使用した実際の通話処理を実装
+    
+    try {
+      setCallStatus('calling');
+      
+      const target = UserAgent.makeURI(`sip:${dialedNumber}@${sipConfig.url.replace('sip:', '').split(':')[0]}`);
+      if (!target) {
+        throw new Error('無効な発信先です');
+      }
+
+      const inviter = new Inviter(userAgentRef.current, target);
+      currentSessionRef.current = inviter;
+
+      // セッションの状態変化を監視
+      inviter.stateChange.addListener((state: SessionState) => {
+        console.log('通話状態変化:', state);
+        switch (state) {
+          case SessionState.Established:
+            setCallStatus('active');
+            break;
+          case SessionState.Terminated:
+            setCallStatus('idle');
+            currentSessionRef.current = null;
+            break;
+        }
+      });
+
+      await inviter.invite();
+      console.log('発信しました');
+    }
+    catch (error) {
+      console.error('発信に失敗しました:', error);
+      setCallStatus('idle');
+      currentSessionRef.current = null;
+    }
   };
 
   /**
@@ -156,6 +266,42 @@ function App() {
    */
   const handleClear = (): void => {
     setDialedNumber('');
+  };
+
+  /**
+   * 着信応答処理
+   */
+  const handleAcceptCall = async (): Promise<void> => {
+    if (currentSessionRef.current && callStatus === 'incoming') {
+      try {
+        await (currentSessionRef.current as Invitation).accept();
+        setCallStatus('active');
+        console.log('着信に応答しました');
+      }
+      catch (error) {
+        console.error('着信応答に失敗しました:', error);
+        setCallStatus('idle');
+        currentSessionRef.current = null;
+      }
+    }
+  };
+
+  /**
+   * 着信拒否処理
+   */
+  const handleRejectCall = async (): Promise<void> => {
+    if (currentSessionRef.current && callStatus === 'incoming') {
+      try {
+        await (currentSessionRef.current as Invitation).reject();
+        setCallStatus('idle');
+        currentSessionRef.current = null;
+        setIncomingNumber('');
+        console.log('着信を拒否しました');
+      }
+      catch (error) {
+        console.error('着信拒否に失敗しました:', error);
+      }
+    }
   };
 
   return (
@@ -294,16 +440,78 @@ function App() {
 
           {/* 発信ボタン */}
           <Button
-            onClick={handleCall}
+            onClick={() => { void handleCall(); }}
             disabled={
-              !dialedNumber
+              (!dialedNumber && callStatus !== 'active')
               || connectionStatus !== 'connected'
             }
-            className="w-full max-w-md h-14 text-lg font-semibold bg-green-600 hover:bg-green-700 disabled:bg-gray-400 rounded-xl shadow-lg transition-all duration-200 hover:shadow-xl"
+            className={`w-full max-w-md h-14 text-lg font-semibold rounded-xl shadow-lg transition-all duration-200 hover:shadow-xl ${
+              callStatus === 'active' 
+                ? 'bg-red-600 hover:bg-red-700' 
+                : callStatus === 'calling'
+                ? 'bg-yellow-600 hover:bg-yellow-700'
+                : 'bg-green-600 hover:bg-green-700 disabled:bg-gray-400'
+            }`}
           >
-            <Phone className="mr-2 h-5 w-5" />
-            発信
+            {callStatus === 'active' ? (
+              <>
+                <PhoneOff className="mr-2 h-5 w-5" />
+                終話
+              </>
+            ) : callStatus === 'calling' ? (
+              <>
+                <PhoneCall className="mr-2 h-5 w-5 animate-pulse" />
+                発信中...
+              </>
+            ) : (
+              <>
+                <Phone className="mr-2 h-5 w-5" />
+                発信
+              </>
+            )}
           </Button>
+
+          {/* 着信UI */}
+          {callStatus === 'incoming' && (
+            <Card className="w-full max-w-md bg-blue-50 border-blue-200">
+              <CardContent className="p-6 text-center">
+                <div className="mb-4">
+                  <PhoneCall className="mx-auto h-12 w-12 text-blue-600 animate-bounce" />
+                  <h3 className="text-lg font-semibold text-gray-800 mt-2">着信中</h3>
+                  <p className="text-gray-600">{incomingNumber}</p>
+                </div>
+                <div className="flex gap-4">
+                  <Button
+                    onClick={() => { void handleAcceptCall(); }}
+                    className="flex-1 bg-green-600 hover:bg-green-700"
+                  >
+                    <Phone className="mr-2 h-4 w-4" />
+                    応答
+                  </Button>
+                  <Button
+                    onClick={() => { void handleRejectCall(); }}
+                    className="flex-1 bg-red-600 hover:bg-red-700"
+                  >
+                    <PhoneOff className="mr-2 h-4 w-4" />
+                    拒否
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* 通話状態表示 */}
+          {callStatus === 'active' && (
+            <Card className="w-full max-w-md bg-green-50 border-green-200">
+              <CardContent className="p-4 text-center">
+                <div className="flex items-center justify-center">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-2" />
+                  <span className="text-green-700 font-medium">通話中</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
         </div>
       </div>
     </div>
