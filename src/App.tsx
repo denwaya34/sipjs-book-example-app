@@ -1,4 +1,4 @@
-import { Phone } from 'lucide-react';
+import { Phone, Wifi, WifiOff } from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,11 @@ interface SipConfig {
   username: string;
   password: string;
 }
+
+/**
+ * SIP接続状態の型定義
+ */
+type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
 /**
  * ダイアルパッドのボタン配列
@@ -32,6 +37,7 @@ function App() {
     password: '',
   });
   const [dialedNumber, setDialedNumber] = useState<string>('');
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
 
   /**
    * ダイアルパッドボタンクリック時の処理
@@ -51,6 +57,76 @@ function App() {
       ...prev,
       [field]: value,
     }));
+  };
+
+  /**
+   * SIP接続処理
+   */
+  const handleConnect = async (): Promise<void> => {
+    if (connectionStatus === 'connected') {
+      // 切断処理
+      setConnectionStatus('disconnected');
+      console.log('SIP接続を切断しました');
+      return;
+    }
+
+    // 接続処理
+    setConnectionStatus('connecting');
+    console.log('SIP接続を開始します:', sipConfig);
+
+    try {
+      // TODO: SIP.js を使用した実際の接続処理を実装
+      await new Promise(resolve => setTimeout(resolve, 2000)); // 仮の接続処理
+      setConnectionStatus('connected');
+      console.log('SIP接続が完了しました');
+    }
+    catch (error) {
+      setConnectionStatus('error');
+      console.error('SIP接続に失敗しました:', error);
+    }
+  };
+
+  /**
+   * 接続ボタンの表示内容を決定
+   */
+  const getConnectionButtonContent = () => {
+    switch (connectionStatus) {
+      case 'connecting':
+        return {
+          text: '接続中...',
+          icon: <Wifi className="mr-2 h-4 w-4 animate-pulse" />,
+          className: 'bg-yellow-600 hover:bg-yellow-700',
+          disabled: true,
+        };
+      case 'connected':
+        return {
+          text: '切断',
+          icon: <WifiOff className="mr-2 h-4 w-4" />,
+          className: 'bg-red-600 hover:bg-red-700',
+          disabled: false,
+        };
+      case 'error':
+        return {
+          text: '再接続',
+          icon: <Wifi className="mr-2 h-4 w-4" />,
+          className: 'bg-orange-600 hover:bg-orange-700',
+          disabled: false,
+        };
+      default:
+        return {
+          text: '接続',
+          icon: <Wifi className="mr-2 h-4 w-4" />,
+          className: 'bg-blue-600 hover:bg-blue-700',
+          disabled: false,
+        };
+    }
+  };
+
+  /**
+   * SIP設定が有効かチェック
+   */
+  const isSipConfigValid = (): boolean => {
+    return !!(sipConfig.url && sipConfig.username && sipConfig.password);
   };
 
   /**
@@ -74,8 +150,11 @@ function App() {
         {/* SIP設定フォーム */}
         <Card className="w-full lg:w-1/3">
           <CardHeader>
-            <CardTitle className="text-xl font-bold text-gray-800">
+            <CardTitle className="text-xl font-bold text-gray-800 flex items-center">
               SIP設定
+              {connectionStatus === 'connected' && (
+                <div className="ml-2 w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -88,8 +167,11 @@ function App() {
                 type="url"
                 placeholder="sip:example.com:5060"
                 value={sipConfig.url}
-                onChange={(e) => { handleSipConfigChange('url', e.target.value); }}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  handleSipConfigChange('url', e.target.value);
+                }}
                 className="w-full"
+                disabled={connectionStatus === 'connected'}
               />
             </div>
 
@@ -102,8 +184,11 @@ function App() {
                 type="text"
                 placeholder="ユーザ名を入力"
                 value={sipConfig.username}
-                onChange={(e) => { handleSipConfigChange('username', e.target.value); }}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  handleSipConfigChange('username', e.target.value);
+                }}
                 className="w-full"
+                disabled={connectionStatus === 'connected'}
               />
             </div>
 
@@ -116,10 +201,37 @@ function App() {
                 type="password"
                 placeholder="パスワードを入力"
                 value={sipConfig.password}
-                onChange={(e) => { handleSipConfigChange('password', e.target.value); }}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  handleSipConfigChange('password', e.target.value);
+                }}
                 className="w-full"
+                disabled={connectionStatus === 'connected'}
               />
             </div>
+
+            {/* 接続状態表示 */}
+            {connectionStatus === 'error' && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-sm text-red-600">
+                  接続に失敗しました。設定を確認して再試行してください。
+                </p>
+              </div>
+            )}
+
+            {/* 接続ボタン */}
+            <Button
+              onClick={() => {
+                void handleConnect();
+              }}
+              disabled={
+                (!isSipConfigValid() && connectionStatus !== 'connected')
+                || getConnectionButtonContent().disabled
+              }
+              className={`w-full h-12 text-sm font-semibold rounded-xl shadow-lg transition-all duration-200 hover:shadow-xl ${getConnectionButtonContent().className}`}
+            >
+              {getConnectionButtonContent().icon}
+              {getConnectionButtonContent().text}
+            </Button>
           </CardContent>
         </Card>
 
@@ -166,7 +278,10 @@ function App() {
           {/* 発信ボタン */}
           <Button
             onClick={handleCall}
-            disabled={!dialedNumber || !sipConfig.url || !sipConfig.username}
+            disabled={
+              !dialedNumber
+              || connectionStatus !== 'connected'
+            }
             className="w-full max-w-md h-14 text-lg font-semibold bg-green-600 hover:bg-green-700 disabled:bg-gray-400 rounded-xl shadow-lg transition-all duration-200 hover:shadow-xl"
           >
             <Phone className="mr-2 h-5 w-5" />
