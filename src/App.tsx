@@ -1,7 +1,6 @@
 import { Phone, Wifi, WifiOff, PhoneCall, PhoneOff } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
-import { UserAgent, Inviter, Invitation, URI } from 'sip.js';
-import type { UserAgentOptions } from 'sip.js';
+import { UserAgent, Inviter, Invitation } from 'sip.js';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -112,7 +111,8 @@ function App() {
         setConnectionStatus('disconnected');
         setCallStatus('idle');
         console.log('SIP接続を切断しました');
-      } catch (error) {
+      }
+      catch (error) {
         console.error('SIP切断エラー:', error);
         setConnectionStatus('error');
       }
@@ -159,7 +159,7 @@ function App() {
 
       // 接続開始
       await userAgent.start();
-      
+
       setConnectionStatus('connected');
       console.log('SIP接続が完了しました');
     }
@@ -214,8 +214,8 @@ function App() {
 
       // 発信実行
       await inviter.invite();
-      
-    } catch (error) {
+    }
+    catch (error) {
       console.error('発信に失敗しました:', error);
       setCallStatus('idle');
       currentSessionRef.current = null;
@@ -235,7 +235,8 @@ function App() {
       setCallStatus('in-call');
       setupAudioSession(currentSessionRef.current);
       console.log('着信に応答しました');
-    } catch (error) {
+    }
+    catch (error) {
       console.error('着信応答に失敗しました:', error);
       setCallStatus('idle');
     }
@@ -251,10 +252,11 @@ function App() {
 
     try {
       setCallStatus('ending');
-      
+
       if (currentSessionRef.current instanceof Inviter) {
         await currentSessionRef.current.bye();
-      } else if (currentSessionRef.current instanceof Invitation) {
+      }
+      else if (currentSessionRef.current instanceof Invitation) {
         await currentSessionRef.current.bye();
       }
 
@@ -262,7 +264,8 @@ function App() {
       setCallStatus('idle');
       setIncomingCallNumber('');
       console.log('通話を終了しました');
-    } catch (error) {
+    }
+    catch (error) {
       console.error('通話終了に失敗しました:', error);
       setCallStatus('idle');
     }
@@ -282,7 +285,8 @@ function App() {
           void audioRef.current.play().catch(console.error);
         }
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('音声セッションのセットアップに失敗しました:', error);
     }
   };
@@ -389,7 +393,7 @@ function App() {
     <div className="flex flex-col items-center justify-center min-h-screen w-full bg-cyan-50 p-4">
       {/* 音声再生用のhidden audio要素 */}
       <audio ref={audioRef} style={{ display: 'none' }} autoPlay />
-      
+
       <div id="phone" className="flex flex-col lg:flex-row gap-8 w-full max-w-6xl">
         {/* SIP設定フォーム */}
         <Card className="w-full lg:w-1/3">
@@ -529,7 +533,7 @@ function App() {
           <Button
             onClick={() => {
               const buttonContent = getCallButtonContent();
-              void buttonContent.onClick();
+              buttonContent.onClick();
             }}
             disabled={getCallButtonContent().disabled}
             className={`w-full max-w-md h-14 text-lg font-semibold disabled:bg-gray-400 rounded-xl shadow-lg transition-all duration-200 hover:shadow-xl ${getCallButtonContent().className}`}
