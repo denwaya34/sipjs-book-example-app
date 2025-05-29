@@ -1,8 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
-import { Invitation, Inviter, UserAgent } from 'sip.js';
-import { SessionState } from 'sip.js/lib/api/session-state';
 
-import type { CallStatus, SipConfig } from '@/@types/sip.types';
+import type { CallStatus, SimpleUserInstance } from '@/@types/sip.types';
 
 /**
  * 通話セッションフックの戻り値インターフェース
@@ -10,127 +8,89 @@ import type { CallStatus, SipConfig } from '@/@types/sip.types';
 interface UseCallSessionReturn {
   callStatus: CallStatus;
   incomingCallNumber: string;
-  currentSession: React.RefObject<Invitation | Inviter | null>;
-  makeCall: (dialedNumber: string, userAgent: UserAgent | null, sipConfig: SipConfig) => Promise<void>;
-  answerCall: () => Promise<void>;
-  hangupCall: () => Promise<void>;
-  handleIncomingCall: (invitation: Invitation) => void;
+  makeCall: (dialedNumber: string, simpleUser: SimpleUserInstance | null) => Promise<void>;
+  answerCall: (simpleUser: SimpleUserInstance | null) => Promise<void>;
+  hangupCall: (simpleUser: SimpleUserInstance | null) => Promise<void>;
+  handleIncomingCall: (simpleUser: SimpleUserInstance | null) => void;
 }
 
 /**
  * 通話セッション管理のカスタムフック
- * @param setupAudioSession - 音声セッションセットアップ関数
  * @returns 通話セッション管理のためのステートと関数
  */
-export const useCallSession = (
-  setupAudioSession: (session: Invitation | Inviter) => void,
-): UseCallSessionReturn => {
+export const useCallSession = (): UseCallSessionReturn => {
   const [callStatus, setCallStatus] = useState<CallStatus>('idle');
   const [incomingCallNumber, setIncomingCallNumber] = useState<string>('');
-  const currentSessionRef = useRef<Invitation | Inviter | null>(null);
-
-  /**
-   * セッション状態変更のハンドラー
-   */
-  const handleSessionStateChange = useCallback((state: SessionState, session: Invitation | Inviter): void => {
-    console.log('通話状態変更:', state);
-    switch (state) {
-      case SessionState.Established:
-        setCallStatus('in-call');
-        setupAudioSession(session);
-        break;
-      case SessionState.Establishing:
-        setCallStatus('calling');
-        break;
-      case SessionState.Terminated:
-        setCallStatus('idle');
-        currentSessionRef.current = null;
-        setIncomingCallNumber('');
-        break;
-    }
-  }, [setupAudioSession]);
+  const isInCallRef = useRef<boolean>(false);
 
   /**
    * 発信処理
    */
   const makeCall = useCallback(async (
     dialedNumber: string,
-    userAgent: UserAgent | null,
-    sipConfig: SipConfig,
+    simpleUser: SimpleUserInstance | null,
   ): Promise<void> => {
-    if (!userAgent || !dialedNumber) {
-      console.error('発信できません: UserAgentまたは番号が未設定');
+    if (!simpleUser || !dialedNumber) {
+      console.error('発信できません: SimpleUserまたは番号が未設定');
       return;
     }
 
     try {
       setCallStatus('calling');
-      console.log('発信開始:', { dialedNumber, sipConfig });
+      console.log('発信開始:', dialedNumber);
 
-      // 発信先URIの構築
-      const targetUri = UserAgent.makeURI(`sip:${dialedNumber}@${sipConfig.url.replace(/^(ws|wss):\/\//, '')}`);
-      if (!targetUri) {
-        throw new Error('無効な発信先URI');
-      }
-
-      // Inviterインスタンスの作成と発信
-      const inviter = new Inviter(userAgent, targetUri);
-      currentSessionRef.current = inviter;
-
-      // セッション状態の監視
-      inviter.stateChange.addListener((state) => {
-        handleSessionStateChange(state, inviter);
-      });
+      // 発信先URIの構築（既存のドメインを使用）
+      const targetUri = dialedNumber.includes('@')
+        ? dialedNumber
+        : `sip:${dialedNumber}`;
 
       // 発信実行
-      await inviter.invite();
+      await simpleUser.call(targetUri);
+
+      isInCallRef.current = true;
+      setCallStatus('in-call');
     }
     catch (error) {
       console.error('発信に失敗しました:', error);
       setCallStatus('idle');
-      currentSessionRef.current = null;
+      isInCallRef.current = false;
     }
-  }, [handleSessionStateChange]);
+  }, []);
 
   /**
    * 着信応答処理
    */
-  const answerCall = useCallback(async (): Promise<void> => {
-    if (!currentSessionRef.current || !(currentSessionRef.current instanceof Invitation)) {
+  const answerCall = useCallback(async (simpleUser: SimpleUserInstance | null): Promise<void> => {
+    if (!simpleUser) {
       return;
     }
 
     try {
-      await currentSessionRef.current.accept();
+      await simpleUser.answer();
       setCallStatus('in-call');
-      setupAudioSession(currentSessionRef.current);
+      isInCallRef.current = true;
       console.log('着信に応答しました');
     }
     catch (error) {
       console.error('着信応答に失敗しました:', error);
       setCallStatus('idle');
     }
-  }, [setupAudioSession]);
+  }, []);
 
   /**
    * 通話終了処理
    */
-  const hangupCall = useCallback(async (): Promise<void> => {
-    if (!currentSessionRef.current) {
+  const hangupCall = useCallback(async (simpleUser: SimpleUserInstance | null): Promise<void> => {
+    if (!simpleUser) {
       return;
     }
 
     try {
       setCallStatus('ending');
 
-      if (currentSessionRef.current instanceof Inviter) {
-        await currentSessionRef.current.bye();
-      }
-      else if (currentSessionRef.current instanceof Invitation) {
-        await currentSessionRef.current.bye();
-      }
+      await simpleUser.hangup();
 
-      currentSessionRef.current = null;
+      isInCallRef.current = false;
       setCallStatus('idle');
       setIncomingCallNumber('');
       console.log('通話を終了しました');
@@ -142,24 +102,36 @@ export const useCallSession = (
   }, []);
 
   /**
-   * 着信処理
+   * 着信処理のセットアップ
    */
-  const handleIncomingCall = useCallback((invitation: Invitation): void => {
-    console.log('着信を受信しました:', invitation.remoteIdentity.uri.user);
-    setIncomingCallNumber(invitation.remoteIdentity.uri.user ?? '不明');
-    setCallStatus('ringing');
-    currentSessionRef.current = invitation;
+  const handleIncomingCall = useCallback((simpleUser: SimpleUserInstance | null): void => {
+    if (!simpleUser) {
+      return;
+    }
 
-    // セッション状態の監視
-    invitation.stateChange.addListener((state) => {
-      handleSessionStateChange(state, invitation);
-    });
-  }, [handleSessionStateChange]);
+    // SimpleUserのデリゲートで着信イベントを処理
+    simpleUser.delegate = {
+      onCallReceived: () => {
+        console.log('着信を受信しました');
+        setCallStatus('ringing');
+        // SimpleUserでは着信番号の取得が限定的なため、"不明"と表示
+        setIncomingCallNumber('着信');
+      },
+      onCallAnswered: () => {
+        setCallStatus('in-call');
+        isInCallRef.current = true;
+      },
+      onCallHangup: () => {
+        setCallStatus('idle');
+        isInCallRef.current = false;
+        setIncomingCallNumber('');
+      },
+    };
+  }, []);
 
   return {
     callStatus,
     incomingCallNumber,
-    currentSession: currentSessionRef,
     makeCall,
     answerCall,
     hangupCall,

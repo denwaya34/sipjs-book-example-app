@@ -1,3 +1,5 @@
+import type { Web } from 'sip.js';
+
 /**
  * 通話状態の型定義
  */
@@ -28,8 +30,11 @@ export const DIAL_PAD_BUTTONS = [
 ] as const;
 
 /**
- * SessionDescriptionHandlerの拡張インターフェース
+ * SimpleUserインスタンスの型
  */
-export interface SessionDescriptionHandlerWithPeerConnection {
-  peerConnection?: RTCPeerConnection;
-}
+export type SimpleUserInstance = Web.SimpleUser;
+
+/**
+ * SimpleUserオプションの型
+ */
+export type SimpleUserOptions = Web.SimpleUserOptions;

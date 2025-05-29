@@ -52,8 +52,8 @@ function App() {
   // カスタムフックの使用
   const { sipConfig, updateSipConfig, isSipConfigValid } = useSipConfig();
   const { dialedNumber, handleDialedNumberChange, handleDialPadClick, clearDialedNumber } = useDialer();
-  const { connectionStatus, connect, disconnect, getUserAgent } = useSipConnection();
-  const { audioRef, setupAudioSession } = useAudioStream();
+  const { connectionStatus, connect, disconnect, getSimpleUser } = useSipConnection();
+  const { audioRef } = useAudioStream();
   const {
     callStatus,
     incomingCallNumber,
@@ -61,17 +61,25 @@ function App() {
     answerCall,
     hangupCall,
     handleIncomingCall,
-  } = useCallSession(setupAudioSession);
+  } = useCallSession();
+
+  // 接続時の着信ハンドラーセットアップ
+  useEffect(() => {
+    const simpleUser = getSimpleUser();
+    if (simpleUser && connectionStatus === 'connected') {
+      handleIncomingCall(simpleUser);
+    }
+  }, [connectionStatus, getSimpleUser, handleIncomingCall]);
 
   // コンポーネントのクリーンアップ
   useEffect(() => {
     return () => {
-      const userAgent = getUserAgent();
-      if (userAgent) {
-        void userAgent.stop();
+      const simpleUser = getSimpleUser();
+      if (simpleUser) {
+        void simpleUser.disconnect();
       }
     };
-  }, [getUserAgent]);
+  }, [getSimpleUser]);
 
   /**
    * SIP接続/切断処理
@@ -83,7 +91,7 @@ function App() {
     }
 
     try {
-      await connect(sipConfig, handleIncomingCall);
+      await connect(sipConfig, audioRef.current);
     }
     catch (error) {
       console.error('接続エラー:', error);
@@ -94,8 +102,8 @@ function App() {
    * 発信処理のラッパー
    */
   const handleCall = async (): Promise<void> => {
-    const userAgent = getUserAgent();
-    await makeCall(dialedNumber, userAgent, sipConfig);
+    const simpleUser = getSimpleUser();
+    await makeCall(dialedNumber, simpleUser);
   };
 
   /**
@@ -105,13 +113,22 @@ function App() {
     if (callStatus === 'ringing') {
       // 実際のアプリケーションでは手動応答を実装
       const timer = setTimeout(() => {
-        void answerCall();
+        const simpleUser = getSimpleUser();
+        void answerCall(simpleUser);
       }, 1000);
       return () => {
         clearTimeout(timer);
       };
     }
-  }, [callStatus, answerCall]);
+  }, [callStatus, answerCall, getSimpleUser]);
+
+  /**
+   * 通話終了処理のラッパー
+   */
+  const handleHangup = async (): Promise<void> => {
+    const simpleUser = getSimpleUser();
+    await hangupCall(simpleUser);
+  };
 
   /**
    * 通話状態に応じた発信/終了ボタンの内容を決定
@@ -123,8 +140,8 @@ function App() {
       connectionStatus,
       {
         handleCall,
-        hangupCall,
-        answerCall,
+        hangupCall: handleHangup,
+        answerCall: () => answerCall(getSimpleUser()),
       },
     );
     return {

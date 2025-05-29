@@ -1,16 +1,16 @@
 import { useCallback, useRef, useState } from 'react';
-import { Invitation, UserAgent } from 'sip.js';
+import { Web } from 'sip.js';
 
-import type { ConnectionStatus, SipConfig } from '@/@types/sip.types';
+import type { ConnectionStatus, SimpleUserInstance, SipConfig } from '@/@types/sip.types';
 
 /**
  * SIP接続管理フックの戻り値インターフェース
  */
 interface UseSipConnectionReturn {
   connectionStatus: ConnectionStatus;
-  connect: (config: SipConfig, onInvite: (invitation: Invitation) => void) => Promise<void>;
+  connect: (config: SipConfig, audioElement?: HTMLAudioElement | null) => Promise<void>;
   disconnect: () => Promise<void>;
-  getUserAgent: () => UserAgent | null;
+  getSimpleUser: () => SimpleUserInstance | null;
 }
 
 /**
@@ -19,14 +19,14 @@ interface UseSipConnectionReturn {
  */
 export const useSipConnection = (): UseSipConnectionReturn => {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
-  const userAgentRef = useRef<UserAgent | null>(null);
+  const simpleUserRef = useRef<SimpleUserInstance | null>(null);
 
   /**
    * SIP接続を確立
    * @param config - SIP設定
-   * @param onInvite - 着信時のコールバック
+   * @param audioElement - 音声要素
    */
-  const connect = useCallback(async (config: SipConfig, onInvite: (invitation: Invitation) => void): Promise<void> => {
+  const connect = useCallback(async (config: SipConfig, audioElement?: HTMLAudioElement | null): Promise<void> => {
     setConnectionStatus('connecting');
     console.log('SIP接続を開始します:', config);
 
@@ -36,25 +36,29 @@ export const useSipConnection = (): UseSipConnectionReturn => {
         ? config.url
         : `wss://${config.url}`;
 
-      // UserAgent オプションの設定
-      const userAgentOptions = {
-        authorizationPassword: config.password,
-        authorizationUsername: config.username,
-        delegate: {
-          onInvite,
-        },
-        transportOptions: {
-          server: serverUri,
-        },
-        uri: UserAgent.makeURI(`sip:${config.username}@${config.url.replace(/^(ws|wss):\/\//, '')}`),
-      };
+      // ドメインを抽出（ポート番号を含む場合も対応）
+      const domain = config.url.replace(/^(ws|wss):\/\//, '').split('/')[0];
 
-      // UserAgent インスタンスの作成
-      const userAgent = new UserAgent(userAgentOptions);
-      userAgentRef.current = userAgent;
+      // SimpleUser オプションの設定
+      // 認証情報をaorに含める形式で設定
+      const options: Web.SimpleUserOptions = {
+        aor: `sip:${config.username}:${config.password}@${domain}`,
+        media: {
+          constraints: { audio: true, video: false },
+          remote: audioElement ? { audio: audioElement } : undefined,
+        },
+        userAgentOptions: {
+          authorizationPassword: config.password,
+          authorizationUsername: config.username,
+        },
+      } as Web.SimpleUserOptions;
+
+      // SimpleUser インスタンスの作成
+      const simpleUser = new Web.SimpleUser(serverUri, options);
+      simpleUserRef.current = simpleUser;
 
       // 接続開始
-      await userAgent.start();
+      await simpleUser.connect();
 
       setConnectionStatus('connected');
       console.log('SIP接続が完了しました');
@@ -62,7 +66,7 @@ export const useSipConnection = (): UseSipConnectionReturn => {
     catch (error) {
       setConnectionStatus('error');
       console.error('SIP接続に失敗しました:', error);
-      userAgentRef.current = null;
+      simpleUserRef.current = null;
       throw error;
     }
   }, []);
@@ -72,9 +76,9 @@ export const useSipConnection = (): UseSipConnectionReturn => {
    */
   const disconnect = useCallback(async (): Promise<void> => {
     try {
-      if (userAgentRef.current) {
-        await userAgentRef.current.stop();
-        userAgentRef.current = null;
+      if (simpleUserRef.current) {
+        await simpleUserRef.current.disconnect();
+        simpleUserRef.current = null;
       }
       setConnectionStatus('disconnected');
       console.log('SIP接続を切断しました');
@@ -90,6 +94,6 @@ export const useSipConnection = (): UseSipConnectionReturn => {
     connectionStatus,
     connect,
     disconnect,
-    getUserAgent: () => userAgentRef.current,
+    getSimpleUser: () => simpleUserRef.current,
   };
 };
