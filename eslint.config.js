@@ -1,8 +1,8 @@
 import js from '@eslint/js';
 import json from '@eslint/json';
 import markdown from '@eslint/markdown';
-
 import stylistic from '@stylistic/eslint-plugin';
+import importPlugin from 'eslint-plugin-import';
 import perfectionist from 'eslint-plugin-perfectionist';
 import reactDom from 'eslint-plugin-react-dom';
 import reactHooks from 'eslint-plugin-react-hooks';
@@ -11,7 +11,6 @@ import reactX from 'eslint-plugin-react-x';
 import unusedImports from 'eslint-plugin-unused-imports';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
-import importPlugin from 'eslint-plugin-import';
 
 export default tseslint.config(
   {
@@ -24,11 +23,55 @@ export default tseslint.config(
       stylistic.configs.customize({
         semi: true,
       }),
-      importPlugin.flatConfigs.recommended,
       perfectionist.configs['recommended-natural'],
     ],
+    plugins: {
+      'unused-imports': unusedImports,
+    },
+    settings: {
+      'import/resolver': {
+        typescript: {
+          alwaysTryTypes: true,
+          project: 'tsconfig.json',
+        },
+      },
+    },
     rules: {
-      'perfectionist/sort-imports': 'error',
+      '@stylistic/jsx-one-expression-per-line': 'off',
+      'perfectionist/sort-objects': 'off',
+      'perfectionist/sort-object-types': 'off',
+      'perfectionist/sort-union-types': 'off',
+      'perfectionist/sort-interfaces': 'off',
+      'perfectionist/sort-classes': 'off',
+      'unused-imports/no-unused-imports': 'error',
+      'unused-imports/no-unused-vars': [
+        'warn',
+        {
+          vars: 'all',
+          varsIgnorePattern: '^_',
+          args: 'after-used',
+          argsIgnorePattern: '^_',
+        },
+      ],
+    },
+  },
+  {
+    files: ['**/*.{js,jsx}'],
+    extends: [
+      importPlugin.flatConfigs.recommended,
+    ],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+      },
+    },
+    rules: {
+      'no-unused-vars': 'off',
+      'import/no-dynamic-require': 'warn',
+      'import/no-nodejs-modules': 'warn',
     },
   },
   {
@@ -36,6 +79,8 @@ export default tseslint.config(
     extends: [
       ...tseslint.configs.strictTypeChecked,
       ...tseslint.configs.stylisticTypeChecked,
+      importPlugin.flatConfigs.recommended,
+      importPlugin.flatConfigs.typescript,
     ],
     languageOptions: {
       ecmaVersion: 'latest',
@@ -52,6 +97,12 @@ export default tseslint.config(
         tsconfigRootDir: import.meta.dirname,
       },
     },
+    plugins: {
+      'react-hooks': reactHooks,
+      'react-refresh': reactRefresh,
+      'react-x': reactX,
+      'react-dom': reactDom,
+    },
     settings: {
       'import/resolver': {
         typescript: {
@@ -59,13 +110,6 @@ export default tseslint.config(
           project: 'tsconfig.json',
         },
       },
-    },
-    plugins: {
-      'react-hooks': reactHooks,
-      'react-refresh': reactRefresh,
-      'react-x': reactX,
-      'react-dom': reactDom,
-      'unused-imports': unusedImports,
     },
     rules: {
       '@typescript-eslint/no-unused-vars': 'off',
