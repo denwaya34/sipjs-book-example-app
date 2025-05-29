@@ -1,6 +1,7 @@
 import { Phone, Wifi, WifiOff, PhoneCall, PhoneOff } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { UserAgent, Inviter, Invitation } from 'sip.js';
+import { SessionState } from 'sip.js/lib/api/session-state';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -197,15 +198,15 @@ function App() {
       inviter.stateChange.addListener((state) => {
         console.log('通話状態変更:', state);
         switch (state) {
-          case 'Establishing':
+          case SessionState.Establishing:
             setCallStatus('calling');
             break;
-          case 'Established':
+          case SessionState.Established:
             setCallStatus('in-call');
             // 音声セッションの設定
             setupAudioSession(inviter);
             break;
-          case 'Terminated':
+          case SessionState.Terminated:
             setCallStatus('idle');
             currentSessionRef.current = null;
             break;
@@ -277,6 +278,7 @@ function App() {
   const setupAudioSession = (session: Inviter | Invitation): void => {
     try {
       // WebRTC PeerConnectionから音声ストリームを取得
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const peerConnection = (session.sessionDescriptionHandler as any)?.peerConnection;
       if (peerConnection) {
         const remoteStreams = peerConnection.getRemoteStreams();
