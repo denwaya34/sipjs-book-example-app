@@ -1,0 +1,343 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# WebRTC & SIP.js ベストプラクティス
+
+## SIP.js 基本パターン
+
+### UserAgent初期化
+```typescript
+import { UserAgent } from 'sip.js';
+
+const createUserAgent = (config: SipConfig): UserAgent => {
+  const serverUri = config.url.startsWith('ws://') || config.url.startsWith('wss://')
+    ? config.url
+    : `wss://${config.url}`;
+
+  const userAgentOptions = {
+    authorizationPassword: config.password,
+    authorizationUsername: config.username,
+    delegate: {
+      onInvite: (invitation: Invitation) => {
+        // 着信処理
+        handleIncomingCall(invitation);
+      },
+    },
+    transportOptions: {
+      server: serverUri,
+    },
+    uri: UserAgent.makeURI(`sip:${config.username}@${config.url.replace(/^(ws|wss):\/\//, '')}`),
+  };
+
+  return new UserAgent(userAgentOptions);
+};
+```
+
+### セッション状態管理
+```typescript
+import { SessionState } from 'sip.js/lib/api/session-state';
+
+const setupSessionStateHandling = (session: Invitation | Inviter) => {
+  session.stateChange.addListener((state: SessionState) => {
+    switch (state) {
+      case SessionState.Initial:
+        console.log('セッション初期化');
+        break;
+      case SessionState.Establishing:
+        setCallStatus('calling');
+        break;
+      case SessionState.Established:
+        setCallStatus('in-call');
+        setupAudioSession(session);
+        break;
+      case SessionState.Terminating:
+        setCallStatus('ending');
+        break;
+      case SessionState.Terminated:
+        setCallStatus('idle');
+        cleanupSession();
+        break;
+    }
+  });
+};
+```
+
+## WebRTC 音声処理
+
+### 音声ストリーム設定
+```typescript
+const setupAudioSession = (session: Invitation | Inviter): void => {
+  try {
+    // SessionDescriptionHandlerから PeerConnection を取得
+    interface SessionDescriptionHandlerWithPeerConnection {
+      peerConnection?: RTCPeerConnection;
+    }
+
+    const sessionDescriptionHandler = session.sessionDescriptionHandler as 
+      SessionDescriptionHandlerWithPeerConnection | undefined;
+    const peerConnection = sessionDescriptionHandler?.peerConnection;
+
+    if (peerConnection && audioRef.current) {
+      // リモートストリームの設定
+      const remoteStream = new MediaStream();
+      const receivers = peerConnection.getReceivers();
+
+      receivers.forEach((receiver) => {
+        if (receiver.track) {
+          remoteStream.addTrack(receiver.track);
+        }
+      });
+
+      if (remoteStream.getTracks().length > 0) {
+        audioRef.current.srcObject = remoteStream;
+        void audioRef.current.play().catch(console.error);
+      }
+    }
+  } catch (error) {
+    console.error('音声セッションセットアップエラー:', error);
+  }
+};
+```
+
+### マイク音声の取得と送信
+```typescript
+const setupLocalAudio = async (): Promise<MediaStream | null> => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+      video: false,
+    });
+
+    return stream;
+  } catch (error) {
+    console.error('マイクアクセスエラー:', error);
+    return null;
+  }
+};
+```
+
+## エラーハンドリングパターン
+
+### SIP接続エラー
+```typescript
+const handleSipConnectionError = (error: unknown): void => {
+  console.error('SIP接続エラー:', error);
+  
+  if (error instanceof Error) {
+    switch (error.message) {
+      case 'Authentication failed':
+        setConnectionStatus('error');
+        setErrorMessage('認証に失敗しました。ユーザー名とパスワードを確認してください。');
+        break;
+      case 'Connection timeout':
+        setConnectionStatus('error');
+        setErrorMessage('接続がタイムアウトしました。ネットワーク接続を確認してください。');
+        break;
+      default:
+        setConnectionStatus('error');
+        setErrorMessage('接続に失敗しました。設定を確認してください。');
+    }
+  }
+};
+```
+
+### WebRTC エラー
+```typescript
+const handleWebRTCError = (error: unknown): void => {
+  console.error('WebRTCエラー:', error);
+  
+  if (error instanceof DOMException) {
+    switch (error.name) {
+      case 'NotAllowedError':
+        setErrorMessage('マイクへのアクセスが拒否されました。ブラウザの設定を確認してください。');
+        break;
+      case 'NotFoundError':
+        setErrorMessage('マイクが見つかりません。デバイスを確認してください。');
+        break;
+      case 'NotReadableError':
+        setErrorMessage('マイクが他のアプリケーションで使用中です。');
+        break;
+      default:
+        setErrorMessage('音声デバイスのエラーが発生しました。');
+    }
+  }
+};
+```
+
+## リソース管理
+
+### クリーンアップパターン
+```typescript
+const useCleanupOnUnmount = () => {
+  useEffect(() => {
+    return () => {
+      // UserAgent のクリーンアップ
+      if (userAgentRef.current) {
+        void userAgentRef.current.stop();
+        userAgentRef.current = null;
+      }
+
+      // セッションのクリーンアップ
+      if (currentSessionRef.current) {
+        try {
+          void currentSessionRef.current.bye();
+        } catch (error) {
+          console.error('セッション終了エラー:', error);
+        }
+        currentSessionRef.current = null;
+      }
+
+      // 音声ストリームのクリーンアップ
+      if (audioRef.current && audioRef.current.srcObject) {
+        const stream = audioRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+        audioRef.current.srcObject = null;
+      }
+    };
+  }, []);
+};
+```
+
+### メモリリーク防止
+```typescript
+const useMemoryLeakPrevention = () => {
+  const timeoutRefs = useRef<NodeJS.Timeout[]>([]);
+  const intervalRefs = useRef<NodeJS.Timeout[]>([]);
+
+  const addTimeout = (callback: () => void, delay: number) => {
+    const timeoutId = setTimeout(callback, delay);
+    timeoutRefs.current.push(timeoutId);
+    return timeoutId;
+  };
+
+  const addInterval = (callback: () => void, delay: number) => {
+    const intervalId = setInterval(callback, delay);
+    intervalRefs.current.push(intervalId);
+    return intervalId;
+  };
+
+  useEffect(() => {
+    return () => {
+      // すべてのタイマーをクリア
+      timeoutRefs.current.forEach(clearTimeout);
+      intervalRefs.current.forEach(clearInterval);
+    };
+  }, []);
+
+  return { addTimeout, addInterval };
+};
+```
+
+## パフォーマンス最適化
+
+### 音声品質最適化
+```typescript
+const optimizeAudioQuality = (peerConnection: RTCPeerConnection) => {
+  // 音声コーデックの優先順位設定
+  const transceivers = peerConnection.getTransceivers();
+  
+  transceivers.forEach((transceiver) => {
+    if (transceiver.receiver.track?.kind === 'audio') {
+      const capabilities = RTCRtpReceiver.getCapabilities('audio');
+      if (capabilities) {
+        // Opus コーデックを優先
+        const opusCodec = capabilities.codecs.find(
+          codec => codec.mimeType === 'audio/opus'
+        );
+        if (opusCodec) {
+          transceiver.setCodecPreferences([opusCodec]);
+        }
+      }
+    }
+  });
+};
+```
+
+### 接続品質監視
+```typescript
+const useConnectionQualityMonitoring = (peerConnection: RTCPeerConnection | null) => {
+  const [connectionQuality, setConnectionQuality] = useState<'good' | 'poor' | 'unknown'>('unknown');
+
+  useEffect(() => {
+    if (!peerConnection) return;
+
+    const monitorConnection = async () => {
+      try {
+        const stats = await peerConnection.getStats();
+        
+        stats.forEach((report) => {
+          if (report.type === 'inbound-rtp' && report.mediaType === 'audio') {
+            const packetsLost = report.packetsLost || 0;
+            const packetsReceived = report.packetsReceived || 0;
+            const lossRate = packetsLost / (packetsLost + packetsReceived);
+            
+            if (lossRate < 0.02) {
+              setConnectionQuality('good');
+            } else {
+              setConnectionQuality('poor');
+            }
+          }
+        });
+      } catch (error) {
+        console.error('接続品質監視エラー:', error);
+      }
+    };
+
+    const interval = setInterval(monitorConnection, 5000);
+    return () => clearInterval(interval);
+  }, [peerConnection]);
+
+  return connectionQuality;
+};
+```
+
+## セキュリティ考慮事項
+
+### 安全な認証情報管理
+```typescript
+// 認証情報の暗号化（実装例）
+const encryptCredentials = (credentials: SipConfig): string => {
+  // 実際の実装では適切な暗号化ライブラリを使用
+  return btoa(JSON.stringify(credentials));
+};
+
+const decryptCredentials = (encrypted: string): SipConfig => {
+  try {
+    return JSON.parse(atob(encrypted));
+  } catch {
+    throw new Error('認証情報の復号化に失敗しました');
+  }
+};
+```
+
+### STUN/TURN サーバー設定
+```typescript
+const iceServers: RTCIceServer[] = [
+  {
+    urls: 'stun:stun.l.google.com:19302',
+  },
+  {
+    urls: 'turn:your-turn-server.com:3478',
+    username: 'your-username',
+    credential: 'your-password',
+  },
+];
+
+// UserAgent設定でICEサーバーを指定
+const userAgentOptions = {
+  // ... 他の設定
+  sessionDescriptionHandlerFactoryOptions: {
+    peerConnectionConfiguration: {
+      iceServers,
+    },
+  },
+};
+```
+
+これらのパターンに従うことで、安定性とパフォーマンスに優れたWebRTCアプリケーションを構築できます。

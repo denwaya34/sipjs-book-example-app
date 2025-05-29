@@ -1,0 +1,221 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# SIP.js WebRTC アプリケーション開発ガイド
+
+このプロジェクトは**SIP.js**を使用したWebRTCベースの音声通話アプリケーションです。
+
+## プロジェクト構造
+
+### エントリーポイント
+- メインエントリー: [index.html](mdc:index.html)
+- Reactアプリケーション: [src/main.tsx](mdc:src/main.tsx)
+- メインコンポーネント: [src/App.tsx](mdc:src/App.tsx)
+
+### 設定ファイル
+- Vite設定: [vite.config.ts](mdc:vite.config.ts)
+- TypeScript設定: [tsconfig.json](mdc:tsconfig.json), [tsconfig.app.json](mdc:tsconfig.app.json)
+- ESLint設定: [eslint.config.js](mdc:eslint.config.js)
+- shadcn/ui設定: [components.json](mdc:components.json)
+- パッケージ管理: [package.json](mdc:package.json)
+
+### UIコンポーネント
+- shadcn/uiコンポーネント: [src/components/ui/](mdc:src/components/ui/)
+  - [button.tsx](mdc:src/components/ui/button.tsx)
+  - [card.tsx](mdc:src/components/ui/card.tsx)
+  - [input.tsx](mdc:src/components/ui/input.tsx)
+  - [label.tsx](mdc:src/components/ui/label.tsx)
+
+## 技術スタック
+
+### コア技術
+- **React 19.1.0**: 関数コンポーネントとフックベース
+- **TypeScript 5.8.3**: 厳密な型チェック有効
+- **Vite 6.3.5**: 高速ビルドツール
+- **SIP.js 0.21.2**: WebRTC/SIP通信ライブラリ
+
+### UI/スタイリング
+- **shadcn/ui**: モダンなUIコンポーネントライブラリ
+- **Tailwind CSS 4.1.8**: ユーティリティファーストCSS
+- **Radix UI**: アクセシブルなプリミティブコンポーネント
+- **Lucide React**: アイコンライブラリ
+
+### 開発ツール
+- **ESLint**: コード品質とスタイル管理
+- **pnpm**: パッケージマネージャー
+- **TypeScript ESLint**: TypeScript専用リンティング
+
+## SIP.js 開発ガイドライン
+
+### UserAgent管理
+```typescript
+// UserAgentインスタンスは useRef で管理
+const userAgentRef = useRef<UserAgent | null>(null);
+
+// 適切なクリーンアップを実装
+useEffect(() => {
+  return () => {
+    if (userAgentRef.current) {
+      void userAgentRef.current.stop();
+    }
+  };
+}, []);
+```
+
+### セッション管理
+```typescript
+// セッション（通話）の管理
+const currentSessionRef = useRef<Invitation | Inviter | null>(null);
+
+// セッション状態の監視
+session.stateChange.addListener((state) => {
+  switch (state) {
+    case SessionState.Established:
+      // 通話確立時の処理
+      break;
+    case SessionState.Terminated:
+      // 通話終了時の処理
+      break;
+  }
+});
+```
+
+### 音声ストリーム処理
+```typescript
+// WebRTC PeerConnectionから音声ストリームを取得
+const setupAudioSession = (session: Invitation | Inviter): void => {
+  const sessionDescriptionHandler = session.sessionDescriptionHandler;
+  const peerConnection = sessionDescriptionHandler?.peerConnection;
+  
+  if (peerConnection && audioRef.current) {
+    const remoteStream = new MediaStream();
+    const receivers = peerConnection.getReceivers();
+    
+    receivers.forEach((receiver) => {
+      const track = receiver.track;
+      remoteStream.addTrack(track);
+    });
+    
+    audioRef.current.srcObject = remoteStream;
+  }
+};
+```
+
+## 型定義ガイドライン
+
+### 通話状態の型定義
+```typescript
+type CallStatus = 'calling' | 'ending' | 'idle' | 'in-call' | 'ringing';
+type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'error';
+```
+
+### SIP設定インターフェース
+```typescript
+interface SipConfig {
+  url: string;
+  username: string;
+  password: string;
+}
+```
+
+## コンポーネント設計原則
+
+### 状態管理
+- **useState**: ローカル状態管理
+- **useRef**: DOM要素とSIP.jsインスタンスの参照
+- **useEffect**: ライフサイクル管理とクリーンアップ
+
+### エラーハンドリング
+```typescript
+try {
+  await userAgent.start();
+  setConnectionStatus('connected');
+} catch (error) {
+  setConnectionStatus('error');
+  console.error('SIP接続に失敗しました:', error);
+}
+```
+
+### 非同期処理
+- すべての非同期関数に適切な型注釈を追加
+- Promise の戻り値は `Promise<void>` を明示
+- エラーハンドリングは try/catch ブロックを使用
+
+## UIコンポーネントガイドライン
+
+### shadcn/ui使用法
+```typescript
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+```
+
+### レスポンシブデザイン
+- Tailwind CSSのブレークポイントを活用
+- `flex flex-col lg:flex-row` でモバイルファーストデザイン
+- `w-full max-w-md` で適切な幅制限
+
+### アクセシビリティ
+- すべてのフォーム要素に適切な `htmlFor` と `id` を設定
+- ボタンの状態を視覚的に表現（disabled, loading等）
+- 音声要素は `autoPlay` と適切な `ref` を設定
+
+## 開発ワークフロー
+
+### コマンド
+```bash
+# 開発サーバー起動
+pnpm dev
+
+# ビルド
+pnpm build
+
+# リンティング
+pnpm lint
+pnpm lint:fix
+
+# プレビュー
+pnpm preview
+```
+
+### ファイル命名規則
+- コンポーネント: PascalCase (例: `App.tsx`)
+- ユーティリティ: camelCase (例: `utils.ts`)
+- 設定ファイル: kebab-case (例: `vite.config.ts`)
+
+## パフォーマンス最適化
+
+### メモ化
+```typescript
+// 重い計算処理のメモ化
+const expensiveValue = useMemo(() => {
+  return computeExpensiveValue(deps);
+}, [deps]);
+
+// コールバック関数のメモ化
+const handleClick = useCallback(() => {
+  // 処理
+}, [dependencies]);
+```
+
+### リソース管理
+- WebRTC接続の適切なクリーンアップ
+- UserAgentインスタンスの適切な停止処理
+- 音声ストリームのリソース解放
+
+## セキュリティ考慮事項
+
+### SIP認証
+- パスワードは適切に暗号化して保存
+- WebSocket接続はWSS（SSL/TLS）を使用
+- 認証情報の適切な検証
+
+### WebRTC セキュリティ
+- STUN/TURNサーバーの適切な設定
+- メディアストリームの適切な権限管理
+- ブラウザのメディア許可の適切な処理
+
+このガイドラインに従うことで、安全で高品質なSIP.js WebRTCアプリケーションを開発できます。
