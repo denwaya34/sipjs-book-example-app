@@ -40,6 +40,19 @@ function App() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
 
   /**
+   * ダイアル番号入力時の処理（キーボード入力対応）
+   * @param value - 入力された値
+   */
+  const handleDialedNumberChange = (value: string): void => {
+    // 数値、#、*のみを許可する正規表現
+    const validCharactersRegex = /^[0-9#*]*$/;
+
+    if (validCharactersRegex.test(value)) {
+      setDialedNumber(value);
+    }
+  };
+
+  /**
    * ダイアルパッドボタンクリック時の処理
    * @param digit - クリックされた数字または記号
    */
@@ -243,9 +256,12 @@ function App() {
               <div className="flex items-center justify-between">
                 <Input
                   value={dialedNumber}
-                  readOnly
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    handleDialedNumberChange(e.target.value);
+                  }}
                   placeholder="番号を入力してください"
-                  className="text-lg font-mono text-center border-none shadow-none text-2xl"
+                  className="text-lg font-mono text-center border-2 border-gray-200 shadow-sm text-2xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                  maxLength={20}
                 />
                 <Button
                   variant="ghost"
