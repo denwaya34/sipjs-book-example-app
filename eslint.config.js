@@ -1,4 +1,7 @@
 import js from '@eslint/js';
+import json from '@eslint/json';
+import markdown from '@eslint/markdown';
+
 import stylistic from '@stylistic/eslint-plugin';
 import perfectionist from 'eslint-plugin-perfectionist';
 import reactDom from 'eslint-plugin-react-dom';
@@ -8,6 +11,7 @@ import reactX from 'eslint-plugin-react-x';
 import unusedImports from 'eslint-plugin-unused-imports';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
+import importPlugin from 'eslint-plugin-import';
 
 export default tseslint.config(
   {
@@ -20,6 +24,7 @@ export default tseslint.config(
       stylistic.configs.customize({
         semi: true,
       }),
+      importPlugin.flatConfigs.recommended,
     ],
     plugins: {
       perfectionist,
@@ -43,6 +48,14 @@ export default tseslint.config(
           './tsconfig.app.json',
         ],
         tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    settings: {
+      'import/resolver': {
+        typescript: {
+          alwaysTryTypes: true,
+          project: 'tsconfig.json',
+        },
       },
     },
     plugins: {
@@ -72,5 +85,22 @@ export default tseslint.config(
         { allowConstantExport: true },
       ],
     },
+  },
+  {
+    files: ['**/*.md'],
+    extends: [
+      ...markdown.configs.recommended,
+    ],
+  },
+  {
+    files: ['**/*.json'],
+    ignores: ['package-lock.json'],
+    language: 'json/json',
+    ...json.configs.recommended,
+  },
+  {
+    files: ['**/*.jsonc'],
+    language: 'json/jsonc',
+    ...json.configs.recommended,
   },
 );
