@@ -1,5 +1,5 @@
 import { Phone, PhoneCall, PhoneOff, Wifi, WifiOff } from 'lucide-react';
-import { useEffect } from 'react';
+import { type ReactElement, useEffect } from 'react';
 
 import { DIAL_PAD_BUTTONS } from '@/@types/sip.types';
 import { Button } from '@/components/ui/button';
@@ -25,7 +25,7 @@ const getIconComponent = (
   iconType: string,
   className: string,
   animated?: boolean,
-): React.ReactElement => {
+): ReactElement => {
   const animatedClass = animated ? 'animate-pulse' : '';
   const fullClassName = `${className} ${animatedClass}`.trim();
 
