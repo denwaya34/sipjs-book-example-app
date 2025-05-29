@@ -1,10 +1,10 @@
-import { useRef } from 'react';
+import { type RefObject, useRef } from 'react';
 
 /**
  * 音声ストリーム管理フックの戻り値インターフェース
  */
 interface UseAudioStreamReturn {
-  audioRef: React.RefObject<HTMLAudioElement | null>;
+  audioRef: RefObject<HTMLAudioElement | null>;
 }
 
 /**
