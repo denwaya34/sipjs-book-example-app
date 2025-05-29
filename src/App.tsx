@@ -44,9 +44,10 @@ function App() {
    * @param value - 入力された値
    */
   const handleDialedNumberChange = (value: string): void => {
-    // 数値、#、*のみを許可する正規表現
-    const validCharactersRegex = /^[0-9#*]*$/;
+    // 1~9、#、*のみを許可する正規表現
+    const validCharactersRegex = /^[1-9#*]*$/;
 
+    console.log(value);
     if (validCharactersRegex.test(value)) {
       setDialedNumber(value);
     }
